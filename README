@@ -1,0 +1,21 @@
+# dstatus - display time and volume on dwm status line
+
+Requirements
+------------
+In order to build dstatus you need Xlib and alsa header files.
+
+Installation
+------------
+Run following commands to build and install dstatus
+
+    make
+    make install
+
+Running dstatus
+---------------
+The purpose of dstatus is to update dwm bar with current time and volume.
+Add this to your .xinitrc to launch dstatus on each session:
+
+    dstatus &
+    exec dwm
+
