@@ -9,10 +9,13 @@
 #include <time.h>
 #include <X11/Xlib.h>
 
-#define MAXLEN 30
-#define VOLUME_NA     " ♬  n/a | "
-#define VOLUME_FORMAT " ♬ %3d%% | "
-#define TIME_FORMAT   "%a %b %d %H:%M "
+#define MAXLEN 20
+#define BAR_FULL          "█"
+#define BAR_EMPTY         " "
+#define VOLUME_PREFIX     " ♬ "
+#define VOLUME_BAR_LEN 15
+#define VOLUME_LENGTH strlen(VOLUME_PREFIX) + VOLUME_BAR_LEN * strlen(BAR_FULL) + 1
+#define TIME_FORMAT   " %a %b %d %H:%M "
 
 static int done = 0;
 
@@ -42,6 +45,27 @@ get_localtime()
 }
 
 static void
+update_volume_bar(char *output, size_t len, int volume)
+{
+        size_t offset_increment;
+        size_t offset = strlen(VOLUME_PREFIX);
+        size_t i = 0;
+        size_t index = VOLUME_BAR_LEN * volume / 100;
+
+        strncpy(output, VOLUME_PREFIX, strlen(VOLUME_PREFIX));
+        offset_increment = strlen(BAR_FULL);
+        while (i++ < index) {
+                strncpy(&output[offset], BAR_FULL, len - offset);
+                offset += offset_increment;
+        }
+        offset_increment = strlen(BAR_EMPTY);
+        while (i++ <= VOLUME_BAR_LEN) {
+                strncpy(&output[offset], BAR_EMPTY, len - offset);
+                offset += offset_increment;
+        }
+}
+
+static void
 difftimespec(struct timespec *res, const struct timespec *a, const struct timespec *b)
 {
         res->tv_sec = a->tv_sec - b->tv_sec - (a->tv_nsec < b->tv_nsec);
@@ -64,10 +88,10 @@ main(int argc, char *argv[])
         struct sigaction act;
         struct timespec start, current, elapsed, interval, wait;
         char status[MAXLEN];
+        char volume_status[VOLUME_LENGTH];
         struct tm *tm;
         int err;
         int retval = 0;
-        int printed = 0;
         int timeout;
 
         snd_mixer_t *mixer = NULL;
@@ -117,11 +141,38 @@ main(int argc, char *argv[])
         while (!done) {
                 if (mixer_volume_changed()) {
                         volume = get_normalized_volume(elem);
+                        interval.tv_sec = 3;
                         if (volume < 0) {
-                                printed = snprintf(status, MAXLEN, VOLUME_NA);
-                        } else {
-                                printed = snprintf(status, MAXLEN, VOLUME_FORMAT, volume);
+                                volume = 0;
                         }
+                        update_volume_bar(volume_status, VOLUME_LENGTH, volume);
+
+                        if (XStoreName(dpy, DefaultRootWindow(dpy), volume_status) < 0) {
+                                perror("XStoreName failed");
+                                done = retval = 1;
+                                break;
+                        }
+                        XFlush(dpy);
+                } else {
+                        tm = get_localtime();
+                        if (!tm) {
+                                perror("Cannot get localtime");
+                                done = retval = 1;
+                                break;
+                        }
+                        interval.tv_sec = 60 - tm->tm_sec;
+
+                        if (!strftime(status, sizeof(status), TIME_FORMAT, tm)) {
+                                status[0] = '\0';
+                        }
+
+                        if (XStoreName(dpy, DefaultRootWindow(dpy), status) < 0) {
+                                perror("XStoreName failed");
+                                done = retval = 1;
+                                break;
+                        }
+                        XFlush(dpy);
+
                 }
 
                 if (clock_gettime(CLOCK_MONOTONIC, &start) < 0) {
@@ -129,24 +180,6 @@ main(int argc, char *argv[])
                         done = retval = 1;
                         break;
                 }
-
-                tm = get_localtime();
-                if (!tm) {
-                        perror("Cannot get localtime");
-                        done = retval = 1;
-                        break;
-                }
-
-                if (!strftime(&status[printed], sizeof(status) - printed, TIME_FORMAT, tm)) {
-                        status[0] = '\0';
-                }
-
-                if (XStoreName(dpy, DefaultRootWindow(dpy), status) < 0) {
-                        perror("XStoreName failed");
-                        done = retval = 1;
-                        break;
-                }
-                XFlush(dpy);
 
                 if (done)
                         break;
@@ -176,7 +209,6 @@ main(int argc, char *argv[])
                 }
 
                 difftimespec(&elapsed, &current, &start);
-                interval.tv_sec = 60 - tm->tm_sec;
                 difftimespec(&wait, &interval, &elapsed);
 
 

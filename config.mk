@@ -12,7 +12,7 @@ MANPREFIX = $(PREFIX)/share/man
 
 # flags
 CPPFLAGS = -D_DEFAULT_SOURCE
-CFLAGS   = -std=c99 -pedantic -Wall -Wextra -Os
+CFLAGS   = -std=c99 -pedantic -Wall -Wextra -Os -g
 LDFLAGS  = -s
 LDLIBS   = -lX11 -lasound
 

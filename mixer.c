@@ -9,7 +9,7 @@
 #define exp10(x) (exp((x) * log(10)))
 
 
-static int update_volume = 1;
+static int update_volume = 0;
 
 int
 mixer_volume_changed()
